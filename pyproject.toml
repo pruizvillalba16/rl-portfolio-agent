@@ -7,7 +7,12 @@ authors = [
     { name = "Pablo Ruiz Villalba", email = "263749187+pruizvillalba16@users.noreply.github.com" }
 ]
 requires-python = ">=3.12,<3.13"
-dependencies = []
+dependencies = [
+    "pandas>=3.1.1",
+    "pyarrow>=26.0.1",
+    "pyyaml>=6.0.3",
+    "yfinance>=1.8.0",
+]
 
 [dependency-groups]
 dev = [
@@ -39,7 +44,8 @@ select = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = ["-ra", "--strict-markers", "--strict-config"]
+addopts = ["-ra", "--strict-markers", "--strict-config", "-m", "not network"]
 markers = [
     "slow: long-running tests (e.g. short training runs); deselect with -m 'not slow'",
+    "network: needs internet access (e.g. live yfinance); run with -m network",
 ]

@@ -300,3 +300,65 @@ Ruff runs through `uv run`, so its version comes from `uv.lock`.
 
 **Why:** Commits stay fast, and the full test suite still gates every push. A single
 source for the ruff version keeps local and CI results identical.
+
+---
+
+## D-026 · Adjusted prices in immutable snapshots
+*2026-11-20*
+
+**Decision:** Store adjusted OHLCV (`auto_adjust=True`), one Parquet file per symbol plus a
+`.meta.json` with download time, library versions and the file's SHA-256. Snapshots are
+only replaced by a full re-download (`--refresh`), never appended to. The current New York
+session is never downloaded.
+
+**Why:** Adjusted closes give total returns, which matters for TLT and VNQ. Adjustments are
+rewritten backwards on every dividend, so incremental updates would mix two adjustments.
+The hash ties each experiment to an exact dataset. An open session has no close yet.
+
+---
+
+## D-027 · Holdout guard in code
+*2026-11-20*
+
+**Decision:** `load_prices` and `load_rates` raise `HoldoutAccessError` for any date from
+`holdout_start` on unless called with `allow_holdout=True`; by default data ends the day
+before the holdout. The holdout is downloaded with everything else.
+
+**Why:** Discipline alone is fragile. With the guard, touching the holdout requires an
+explicit, searchable flag that should appear only in the final-test code.
+
+---
+
+## D-028 · Validation fails loudly
+*2026-11-20*
+
+**Decision:** Data is validated on download and on load (unique sorted dates, no NaN close,
+positive prices, no truncated start, no gap over 5 business days). Any failure raises;
+nothing is cleaned automatically. Daily moves above 25% only log a warning.
+
+**Why:** Automatic forward-filling or row dropping hides data problems that would later look
+like model behaviour. Real crashes produce large moves, so those cannot be errors.
+
+---
+
+## D-029 · Calendar alignment
+*2026-11-20*
+
+**Decision:** ETF prices are aligned by inner join on dates, with a warning if more than 5
+dates are lost. Rate series are loaded separately (`load_rates`) and are not joined with
+ETF prices in the data module.
+
+**Why:** All ETFs share the NYSE calendar, so the join loses nothing in practice. ^IRX
+follows the bond calendar (closed on Columbus and Veterans Day), and joining it would
+silently drop trading days.
+
+---
+
+## D-030 · Risk-free rate data
+*2026-11-20*
+
+**Decision:** Download the 13-week T-bill yield (^IRX) now; decide how it is used for cash
+returns and for Sharpe/Sortino in v2.
+
+**Why:** Cash at 0% would penalise holding cash in high-rate years (2006–07, 2023–24).
+^IRX covers the full period, unlike the BIL ETF (2007 on).

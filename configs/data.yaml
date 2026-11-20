@@ -1,0 +1,17 @@
+# Data download and cache settings.
+
+# ETFs (adjusted prices: dividends and splits included).
+tickers: [SPY, QQQ, IWM, EFA, EEM, TLT, GLD, VNQ]
+
+# Interest-rate series (annualised yield in percentage points, not prices).
+# ^IRX = 13-week US Treasury bill.
+rates: ["^IRX"]
+
+start: "2005-01-01"
+
+# First day of the final holdout. load_prices refuses dates from here on
+# unless called with allow_holdout=True.
+holdout_start: "2025-01-01"
+
+# Relative paths are resolved against the project root (parent of configs/).
+cache_dir: data/raw
