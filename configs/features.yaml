@@ -1,0 +1,17 @@
+# Technical features computed from adjusted closes.
+
+rsi_window: 14
+
+macd_fast: 12
+macd_slow: 26
+macd_signal: 9
+
+vol_window: 20   # realised volatility of daily log returns, annualised
+sma_window: 50   # distance of the close to its simple moving average
+
+# Leading trading days dropped so every rolling window is full and the
+# exponential averages have forgotten their arbitrary starting value.
+warmup_days: 100
+
+# Normalised features are clipped to [-clip, clip] standard deviations.
+clip: 5.0

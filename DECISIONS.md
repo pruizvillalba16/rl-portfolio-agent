@@ -378,3 +378,50 @@ D-029. Rate series keep their own calendar.
 **Why:** All ETFs trade on the NYSE calendar, so any difference is a data error. A day missing
 from one ETF passes the per-series gap check like a holiday, and the inner join removed it
 from every ticker without a message, so the next return silently spanned two days.
+
+---
+
+## D-032 · Feature definitions
+*2026-11-20*
+
+**Decision:** Features are written in plain pandas: log return, RSI(14) with Wilder
+smoothing, MACD(12, 26, 9) line and histogram divided by the close, 20-day annualised
+volatility, and log distance to the 50-day SMA. The first 100 trading days are dropped
+as warm-up. Features are computed on the fly, not cached.
+
+**Why:** A few lines of our own code give full control over each definition, which matters
+in a project about avoiding look-ahead; TA-Lib needs a C library and pandas-ta is poorly
+maintained. Raw MACD is in dollars and its scale grows with the price. The warm-up lets
+exponential averages forget their starting value. Computing features takes milliseconds,
+so a cache would only add something that can go stale.
+
+---
+
+## D-033 · Look-ahead tests by truncation and perturbation
+*2026-11-20*
+
+**Decision:** Every feature is tested at several cut-off days: removing all later prices, or
+rewriting them at random, must leave the features up to the cut-off bit-for-bit identical.
+A separate test checks that the close of day t does change the features of day t.
+
+**Why:** This tests the property itself instead of trusting a reading of the code. Both
+tests fail when a one-day `shift(-1)` or a centred moving average is injected.
+
+---
+
+## D-034 · Feature normalisation
+*2026-11-20*
+
+**Decision:** A `FeatureScaler` is fitted on the training part of each walk-forward window
+and reused unchanged for its validation and test parts. It uses one mean and standard
+deviation per feature, pooled across tickers, and clips to ±5 standard deviations.
+
+**Why:** A fixed transform gives each input the same meaning across training and test.
+Expanding or rolling z-scores change the meaning of a value over time, and a single event
+such as 2008 distorts them for years. Pooling keeps differences between assets (EEM is
+more volatile than TLT), which an allocation agent needs. Clipping stops extreme days such
+as March 2020 from destabilising training. The scaler is fitted on the whole training
+window, so training inputs use statistics from later training days. This is allowed: it
+is a constant affine transform that the first layer's weights could absorb, and the
+training window is in-sample anyway. Validation and test inputs use only statistics
+frozen before they start.
