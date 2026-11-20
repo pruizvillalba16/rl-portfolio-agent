@@ -56,3 +56,5 @@ TensorBoard, MLflow (local), Streamlit, pytest, ruff, pre-commit, GitHub Actions
 - WSL Ubuntu 24.04. CPU only (AMD integrated graphics, no CUDA).
 - Git remote uses the SSH alias `github-personal`. Never use the `gh` CLI in this repo:
   it is logged into a different (university) account.
+
+See @DECISIONS.md for the reasoning behind each decision.
