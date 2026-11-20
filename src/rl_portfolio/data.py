@@ -24,7 +24,7 @@ import hashlib
 import json
 import logging
 import re
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Literal
@@ -49,7 +49,6 @@ PRICE_COLUMNS = ("open", "high", "low", "close")
 MAX_START_DELAY_DAYS = 7  # calendar days between requested start and first row
 MAX_GAP_BUSINESS_DAYS = 5  # business days between consecutive rows
 EXTREME_DAILY_RETURN = 0.25  # absolute daily return that triggers a warning
-MAX_DROPPED_DAYS = 5  # rows lost when aligning several tickers before warning
 
 
 class DataValidationError(ValueError):
@@ -326,6 +325,39 @@ def _load_field(
     return {s: load_snapshot(s, config.cache_dir)[field].loc[start_ts:end_ts] for s in symbols}
 
 
+def _format_dates(dates: pd.DatetimeIndex, limit: int = 3) -> str:
+    shown = ", ".join(d.strftime("%Y-%m-%d") for d in dates[:limit])
+    return f"{shown}, ..." if len(dates) > limit else shown
+
+
+def check_same_calendar(indexes: Mapping[str, pd.DatetimeIndex]) -> None:
+    """Raise ``DataValidationError`` unless every index holds exactly the same dates.
+
+    The first symbol is the reference; the error lists, for each other symbol,
+    the dates it is missing and the extra dates it has.
+    """
+    items = list(indexes.items())
+    if len(items) < 2:
+        return
+    ref_symbol, ref = items[0]
+    problems = []
+    for symbol, index in items[1:]:
+        missing = ref.difference(index)
+        extra = index.difference(ref)
+        if len(missing) or len(extra):
+            problems.append(
+                f"{symbol}: {len(missing)} missing ({_format_dates(missing)}); "
+                f"{len(extra)} extra ({_format_dates(extra)})"
+            )
+    if problems:
+        raise DataValidationError(
+            f"Ticker calendars differ from {ref_symbol}: "
+            + "; ".join(problems)
+            + ". If the snapshots were downloaded on different days, re-download "
+            "all of them with --refresh."
+        )
+
+
 def load_prices(
     tickers: Sequence[str],
     start: date | str | None = None,
@@ -335,7 +367,7 @@ def load_prices(
     field: str = "close",
     allow_holdout: bool = False,
 ) -> pd.DataFrame:
-    """Load one price field for several tickers, aligned on common trading days.
+    """Load one price field for several tickers that share the same trading days.
 
     Args:
         tickers: ETF symbols (rate series are rejected; use :func:`load_rates`).
@@ -348,12 +380,12 @@ def load_prices(
             final-test phase may set this.
 
     Returns:
-        Wide frame, one column per ticker, indexed by the dates where every
-        ticker has data (inner join). Logs a warning if the join drops more
-        than ``MAX_DROPPED_DAYS`` dates inside the period all tickers cover.
+        Wide frame, one column per ticker, indexed by date.
 
     Raises:
         HoldoutAccessError: If the dates reach the holdout without permission.
+        DataValidationError: If the tickers do not have exactly the same dates
+            in the requested range. Nothing is dropped or filled.
     """
     rates = sorted(set(tickers) & set(config.rates))
     if rates:
@@ -362,20 +394,8 @@ def load_prices(
     series = _load_field(
         tickers, start, end, config=config, field=field, allow_holdout=allow_holdout
     )
-    frame = pd.concat(series, axis=1, join="inner")
-
-    non_empty = [s for s in series.values() if not s.empty]
-    if non_empty:
-        common_start = max(s.index[0] for s in non_empty)
-        common_end = min(s.index[-1] for s in non_empty)
-        union = pd.DatetimeIndex([])
-        for s in non_empty:
-            union = union.union(s.index)
-        in_range = union[(union >= common_start) & (union <= common_end)]
-        dropped = len(in_range) - len(frame.loc[common_start:common_end])
-        if dropped > MAX_DROPPED_DAYS:
-            logger.warning("Alignment dropped %d dates that not all tickers have", dropped)
-
+    check_same_calendar({s: values.index for s, values in series.items()})
+    frame = pd.concat(series, axis=1)
     frame.index.name = "date"
     return frame
 

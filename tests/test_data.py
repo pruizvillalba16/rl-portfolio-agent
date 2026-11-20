@@ -303,32 +303,55 @@ def test_load_prices_slices_inclusively(cached: DataConfig) -> None:
     ]
 
 
-def test_load_prices_aligns_on_common_dates(
-    cached: DataConfig, caplog: pytest.LogCaptureFixture
-) -> None:
-    bbb = make_ohlcv(seed=2)
-    bbb = bbb.drop(bbb.index[200:208:2])  # 4 missing days: within tolerance, no warning
-    save_snapshot(bbb, "BBB", cached.cache_dir, kind="price", start=START)
-
-    with caplog.at_level(logging.WARNING, logger="rl_portfolio.data"):
-        prices = load_prices(["AAA", "BBB"], config=cached)
-
+def test_load_prices_returns_one_column_per_ticker(cached: DataConfig) -> None:
+    prices = load_prices(["AAA", "BBB"], config=cached)
     assert list(prices.columns) == ["AAA", "BBB"]
     assert prices.index.name == "date"
     assert not prices.isna().any().any()
-    assert len(prices) == len(load_prices(["AAA"], config=cached)) - 4
-    assert "Alignment dropped" not in caplog.text
+    assert prices.index.equals(load_prices(["AAA"], config=cached).index)
 
 
-def test_load_prices_warns_when_alignment_drops_many_days(
-    cached: DataConfig, caplog: pytest.LogCaptureFixture
-) -> None:
-    bbb = make_ohlcv(seed=2)
-    bbb = bbb.drop(bbb.index[200:240:2])  # 20 missing days, gaps of 2 business days
-    save_snapshot(bbb, "BBB", cached.cache_dir, kind="price", start=START)
-    with caplog.at_level(logging.WARNING, logger="rl_portfolio.data"):
+# --- calendar consistency across tickers -------------------------------------
+
+
+def _replace_snapshot(config: DataConfig, symbol: str, df: pd.DataFrame) -> None:
+    save_snapshot(df, symbol, config.cache_dir, kind="price", start=START)
+
+
+def test_load_prices_rejects_missing_date_in_one_ticker(cached: DataConfig) -> None:
+    # One missing day is a 2-business-day gap: per-series validation accepts it.
+    bbb = make_ohlcv(seed=2).drop(pd.Timestamp("2010-03-10"))
+    _replace_snapshot(cached, "BBB", bbb)
+    with pytest.raises(DataValidationError, match=r"BBB: 1 missing \(2010-03-10\); 0 extra"):
         load_prices(["AAA", "BBB"], config=cached)
-    assert "Alignment dropped 20 dates" in caplog.text
+
+
+def test_load_prices_rejects_extra_date_in_one_ticker(cached: DataConfig) -> None:
+    aaa = make_ohlcv(seed=1)
+    saturday = pd.DataFrame(aaa.loc[["2010-03-12"]].to_numpy(), columns=aaa.columns)
+    saturday.index = pd.DatetimeIndex(["2010-03-13"], name="date")
+    _replace_snapshot(cached, "AAA", pd.concat([aaa, saturday]).sort_index())
+    # AAA is the reference, so BBB is reported as missing AAA's extra date.
+    with pytest.raises(DataValidationError, match=r"BBB: 1 missing \(2010-03-13\)"):
+        load_prices(["AAA", "BBB"], config=cached)
+    with pytest.raises(DataValidationError, match=r"AAA: 0 missing \(\); 1 extra \(2010-03-13\)"):
+        load_prices(["BBB", "AAA"], config=cached)
+
+
+def test_load_prices_ignores_mismatch_outside_requested_range(cached: DataConfig) -> None:
+    _replace_snapshot(cached, "BBB", make_ohlcv(seed=2).drop(pd.Timestamp("2010-03-10")))
+    prices = load_prices(["AAA", "BBB"], "2015-01-01", "2020-12-31", config=cached)
+    assert prices.index[0] == pd.Timestamp("2015-01-01")
+    assert prices.index[-1] == pd.Timestamp("2020-12-31")
+    assert not prices.isna().any().any()
+
+
+def test_load_prices_rejects_snapshots_with_different_end(cached: DataConfig) -> None:
+    # BBB snapshot taken a month earlier than AAA's: both cover the pre-holdout period.
+    _replace_snapshot(cached, "BBB", make_ohlcv(seed=2, end="2026-05-29"))
+    load_prices(["AAA", "BBB"], config=cached)
+    with pytest.raises(DataValidationError, match="--refresh"):
+        load_prices(["AAA", "BBB"], config=cached, allow_holdout=True)
 
 
 def test_load_prices_rejects_rate_series(cached: DataConfig) -> None:

@@ -344,6 +344,8 @@ like model behaviour. Real crashes produce large moves, so those cannot be error
 ## D-029 · Calendar alignment
 *2026-11-20*
 
+*Superseded in part by D-031: ETF calendars must now match exactly.*
+
 **Decision:** ETF prices are aligned by inner join on dates, with a warning if more than 5
 dates are lost. Rate series are loaded separately (`load_rates`) and are not joined with
 ETF prices in the data module.
@@ -362,3 +364,17 @@ returns and for Sharpe/Sortino in v2.
 
 **Why:** Cash at 0% would penalise holding cash in high-rate years (2006–07, 2023–24).
 ^IRX covers the full period, unlike the BIL ETF (2007 on).
+
+---
+
+## D-031 · ETF calendars must match exactly
+*2026-11-20*
+
+**Decision:** `load_prices` checks that every requested ETF has exactly the same dates in the
+requested range and raises `DataValidationError` (listing missing and extra dates per
+ticker) otherwise. This replaces the inner join with a warning above 5 lost dates from
+D-029. Rate series keep their own calendar.
+
+**Why:** All ETFs trade on the NYSE calendar, so any difference is a data error. A day missing
+from one ETF passes the per-series gap check like a holiday, and the inner join removed it
+from every ticker without a message, so the next return silently spanned two days.
