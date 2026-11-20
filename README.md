@@ -70,11 +70,11 @@ from rl_portfolio.config import load_data_config, load_feature_config
 from rl_portfolio.data import load_prices
 from rl_portfolio.features import FeatureScaler, compute_features
 
-prices = load_prices(["SPY", "TLT"], config=load_data_config())   # ends 2024-12-31
-features = compute_features(prices, load_feature_config())         # (ticker, feature) columns
+prices = load_prices(["SPY", "TLT"], config=load_data_config())  # ends 2024-12-31
+features = compute_features(prices, load_feature_config())  # (ticker, feature) columns
 
-scaler = FeatureScaler().fit(features.loc[:"2009"])                # training window only
-normalised = scaler.transform(features.loc["2010"])                # frozen statistics
+scaler = FeatureScaler().fit(features.loc[:"2009"])  # training window only
+normalised = scaler.transform(features.loc["2010"])  # frozen statistics
 ```
 
 ## Development

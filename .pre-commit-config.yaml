@@ -19,8 +19,10 @@ repos:
         entry: uv run ruff check --fix
         language: system
         types_or: [python, pyi]
+      # Markdown included: ruff also formats Python code blocks in .md files,
+      # and CI checks the whole repository.
       - id: ruff-format
         name: ruff format
         entry: uv run ruff format
         language: system
-        types_or: [python, pyi]
+        types_or: [python, pyi, markdown]
