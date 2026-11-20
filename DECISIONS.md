@@ -254,3 +254,49 @@ license is decided at the end of the project.
 **Why:** By then it will be clear how much time is left and what worked; planning them now
 would be guesswork. A license can be added at any time.
 
+---
+
+## D-022 · Package layout
+*2026-11-20*
+
+**Decision:** src layout, with the package at `src/rl_portfolio/` and tests in `tests/`.
+
+**Why:** The package must be installed to be imported, so tests run against what is actually
+installed rather than whatever happens to be in the working directory.
+
+**Rejected:** Flat layout (simpler, but allows accidental imports from the repo root).
+
+---
+
+## D-023 · Dependency management
+*2026-11-20*
+
+**Decision:** Runtime dependencies are added incrementally, when a module first needs them.
+Dev tools (ruff, pytest, pre-commit) live in a uv `dev` group. `uv.lock` is committed and
+CI installs with `--locked`.
+
+**Why:** Each dependency enters with a reason, the lock stays small, and any machine can
+reproduce the exact environment.
+
+---
+
+## D-024 · Lint rules
+*2026-11-20*
+
+**Decision:** Ruff with rule sets E, W, F, I, B, UP, SIM and NPY; line length 100; ruff
+also formats the code.
+
+**Why:** Catches real bugs and outdated syntax with little noise. Mandatory docstring (D)
+and pandas (PD) rules were rejected for now because they create more noise than value
+at this stage.
+
+---
+
+## D-025 · Where checks run
+*2026-11-20*
+
+**Decision:** pre-commit runs ruff and basic file-hygiene hooks; pytest runs only in CI.
+Ruff runs through `uv run`, so its version comes from `uv.lock`.
+
+**Why:** Commits stay fast, and the full test suite still gates every push. A single
+source for the ruff version keeps local and CI results identical.
